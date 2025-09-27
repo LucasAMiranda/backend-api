@@ -19,18 +19,14 @@ Este repositório contém o código backend para o sistema **WineFlow**, uma API
 A aplicação segue uma estrutura modular para separar a configuração, o modelo de dados e a lógica da aplicação principal:
 
 ```
-wineflow-api/
+backend-api/
 ├── app.py                      # Aplicação Flask principal e definições de rotas (Endpoints)
 ├── database.db                 # Arquivo SQLite gerado ao rodar o app.py
 ├── schemas/
 │   └── config.py               # Definições de classes de configuração (Desenvolvimento/Produção)
 ├── model/
 │   └── models.py               # Definição da classe Vinho (Modelo SQLAlchemy)
-├── templates/
-│   └── index.html              # Frontend (servido apenas para demonstração)
-└── static/
-    ├── Scripts.js              # Lógica Frontend (JS)
-    └── style.css               # Estilos Frontend (CSS)
+
 ```
 
 ## ⚙️ Instalação e Execução
