@@ -1,145 +1,180 @@
-from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, jsonify, request, render_template
 from flasgger import Swagger
-from models import db, Usuario
+from flask_cors import CORS 
+from model.models import db, Vinho 
+from schemas.config import config_by_name 
+from sqlalchemy.exc import IntegrityError 
+
+# Seleção de Configuração
+config_name = 'development' 
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Carrega a configuração
+app.config.from_object(config_by_name[config_name]) 
 
-db = SQLAlchemy(app)
+CORS(app) 
+# Configuração básica do Flasgger
 swagger = Swagger(app)
 
-@app.route('/cadastrar_usuario', methods=['POST'])
-def cadastrar_usuario():
+db.init_app(app) 
+
+# ===============================================
+# ROTA PRINCIPAL: SERVIR O FRONTEND
+# ===============================================
+@app.route('/', methods=['GET'])
+def index():
     """
-    Endpoint para cadastrar um novo usuário.
+    Endpoint para carregar a página principal (index.html).
     ---
     tags:
-      - Usuários
+      - Frontend
+    responses:
+      200:
+        description: Retorna a página HTML do gerenciamento de vinhos.
+    """
+    return render_template('index.html')
+
+
+# ===============================================
+# ENDPOINTS PARA VINHOS
+# ===============================================
+
+@app.route('/cadastrar_vinho', methods=['POST'])
+def cadastrar_vinho():
+    """
+    Cadastrar um Novo Vinho
+    ---
+    tags:
+      - Vinhos
     parameters:
       - in: body
         name: body
         schema:
-          id: Usuario
+          id: Vinho
           required:
-            - nome
-            - email
+            - nome_vinho
+            - data_fabricacao
+            - cidade_producao
           properties:
-            nome:
+            nome_vinho:
               type: string
-              description: Nome do usuário
-            email:
+              description: Nome do vinho.
+            data_fabricacao:
               type: string
-              description: E-mail do usuário
+              format: date
+              description: Data de fabricação (YYYY-MM-DD).
+            cidade_producao:
+              type: string
+              description: Cidade onde o vinho foi produzido.
     responses:
       201:
-        description: Usuário cadastrado com sucesso.
+        description: Vinho cadastrado com sucesso.
       400:
-        description: Requisição inválida.
+        description: Requisição inválida, dados incompletos ou nome duplicado.
     """
     try:
         data = request.get_json()
-        novo = Usuario(nome=data['nome'], email=data['email'])
+        
+        required_fields = ['nome_vinho', 'data_fabricacao', 'cidade_producao']
+        if not data or not all(field in data for field in required_fields):
+             return jsonify({'message': 'Dados de entrada incompletos. Todos os campos são obrigatórios.'}), 400
+
+        novo = Vinho(
+            nome_vinho=data['nome_vinho'], 
+            data_fabricacao=data['data_fabricacao'],
+            cidade_producao=data['cidade_producao']
+        )
         db.session.add(novo)
         db.session.commit()
-        return jsonify({'message': 'Usuário cadastrado com sucesso!'}), 201
-    except Exception as e:
-        return jsonify({'message': f'Erro ao cadastrar usuário: {str(e)}'}), 400
-        
+        return jsonify({'message': 'Vinho cadastrado com sucesso!'}), 201
 
-@app.route('/buscar_usuarios', methods=['GET'])
-def buscar_usuarios():
+    except IntegrityError as e:
+        db.session.rollback()
+        vinho_nome = data.get('nome_vinho', 'Desconhecido')
+        return jsonify({'message': f'Erro: O vinho "{vinho_nome}" já existe. O nome deve ser único.'}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro inesperado ao cadastrar: {e}") 
+        return jsonify({'message': f'Erro interno ao cadastrar vinho: {str(e)}'}), 400
+
+@app.route('/buscar_vinhos', methods=['GET'])
+def buscar_vinhos():
     """
-    Endpoint para listar todos os usuários.
+    Listar Todos os Vinhos
     ---
     tags:
-      - Usuários
+      - Vinhos
     responses:
       200:
-        description: Lista de usuários.
+        description: Retorna uma lista de todos os vinhos cadastrados.
         schema:
           type: array
           items:
+            type: object
             properties:
               id:
                 type: integer
-              nome:
+                description: ID único do vinho.
+              nome_vinho:
                 type: string
-              email:
+                description: Nome do vinho.
+              data_fabricacao:
                 type: string
-      404:
-        description: Nenhum usuário encontrado.
+                description: Data de fabricação (YYYY-MM-DD).
+              cidade_producao:
+                type: string
+                description: Cidade de produção.
     """
-    usuarios = Usuario.query.all()
-    if usuarios:
-        resultado = [{'id': u.id, 'nome': u.nome, 'email': u.email} for u in usuarios]
-        return jsonify(resultado), 200
-    else:
-        return jsonify({'message': 'Nenhum usuário encontrado.'}), 404
+    vinhos = Vinho.query.all()
+    resultado = [
+        {'id': v.id, 'nome_vinho': v.nome_vinho, 'data_fabricacao': v.data_fabricacao, 'cidade_producao': v.cidade_producao} 
+        for v in vinhos
+    ]
+    return jsonify(resultado), 200
 
-@app.route('/buscar_usuario/<int:id>', methods=['GET'])
-def buscar_usuario_por_id(id):
+
+@app.route('/deletar_vinho/<int:id>', methods=['DELETE'])
+def deletar_vinho(id):
     """
-    Endpoint para buscar um usuário por ID.
+    Deletar Vinho por ID
     ---
     tags:
-      - Usuários
+      - Vinhos
     parameters:
       - name: id
         in: path
         type: integer
         required: true
-        description: ID do usuário
+        description: ID do vinho a ser deletado.
     responses:
       200:
-        description: Detalhes do usuário.
+        description: Vinho deletado com sucesso.
         schema:
-          id: UsuarioDetalhe
+          type: object
           properties:
-            id:
-              type: integer
-            nome:
+            message:
               type: string
-            email:
+              example: Vinho deletado com sucesso.
+      404:
+        description: Vinho não encontrado.
+        schema:
+          type: object
+          properties:
+            message:
               type: string
-      404:
-        description: Usuário não encontrado.
+              example: Vinho não encontrado.
     """
-    usuario = Usuario.query.get(id)
-    if usuario:
-        return jsonify({'id': usuario.id, 'nome': usuario.nome, 'email': usuario.email}), 200
-    else:
-        return jsonify({'message': 'Usuário não encontrado.'}), 404
-
-@app.route('/deletar_usuario/<int:id>', methods=['DELETE'])
-def deletar_usuario(id):
-    """
-    Endpoint para deletar um usuário.
-    ---
-    tags:
-      - Usuários
-    parameters:
-      - name: id
-        in: path
-        type: integer
-        required: true
-        description: ID do usuário a ser deletado.
-    responses:
-      200:
-        description: Usuário deletado com sucesso.
-      404:
-        description: Usuário não encontrado.
-    """
-    usuario = Usuario.query.get(id)
-    if usuario:
-        db.session.delete(usuario)
+    vinho = Vinho.query.get(id)
+    if vinho:
+        db.session.delete(vinho)
         db.session.commit()
-        return jsonify({'message': 'Usuário deletado com sucesso.'}), 200
-    return jsonify({'message': 'Usuário não encontrado.'}), 404
+        return jsonify({'message': 'Vinho deletado com sucesso.'}), 200
+    return jsonify({'message': 'Vinho não encontrado.'}), 404
+
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        # Cria as tabelas
+        db.create_all() 
     app.run(debug=True)
-
