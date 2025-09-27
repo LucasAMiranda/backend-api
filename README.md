@@ -1,7 +1,7 @@
 
 -----
 
-# 🍷 WineFlow API: Gerenciamento de Vinhos (Backend)
+# 🍷 API: Gerenciamento de Vinhos (Backend)
 
 Este repositório contém o código backend para o sistema **WineFlow**, uma API RESTful simples desenvolvida em **Flask** e **SQLAlchemy** para gerenciar o cadastro e o catálogo de vinhos.
 
